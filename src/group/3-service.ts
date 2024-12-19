@@ -1,13 +1,74 @@
-import { prisma } from "../db";
 import { AlreadyInGroupError, GroupAlreadyDrawnError, GroupByIdNotFoundError, NotEnoughMembersToDrawError, NotGroupOwnerError } from "./error";
-import * as repository from "./4-repository";
-import type { GroupSelected } from "./4-repository";
+import { GroupSelected } from "../db";
 
-export async function listGroup(search: { message?: string }): Promise<GroupSelected[]> {
-    return await repository.listGroup(search);
+//#region dependencies
+export interface ListGroupRepository {
+    (search: { message?: string }): Promise<GroupSelected[]>
+}
+export interface CreateGroupRepository {
+    (
+        user: {
+            id: string,
+        },
+        data: {
+            message: string,
+            minimumExpectedPrice: number | null,
+            maximumExpectedPrice: number | null,
+        },
+    ): Promise<GroupSelected>
+}
+export interface GetGroupRepository {
+    (groupId: string): Promise<GroupSelected>
+}
+export interface UpdateGroupRepository {
+    (
+        groupId: string,
+        data: {
+            message?: string,
+            minimumExpectedPrice?: number | null,
+            maximumExpectedPrice?: number | null,
+        },
+    ): Promise<void>
+}
+export interface DeleteGroupRepository {
+    (groupId: string): Promise<void>
+}
+export interface IsMemberRepository {
+    (userId: string, groupId: string): Promise<boolean>
+}
+export interface CreateMemberRelationshipRepository {
+    (
+        userId: string,
+        groupId: string,
+        data: {
+            wish: string,
+            presentOffered: string,
+        },
+    ): Promise<void>
+}
+export interface DeleteMemberRepository {
+    (userId: string, groupId: string): Promise<void>
+}
+export interface ListMemberIdsOfGroupRepository {
+    (groupId: string): Promise<string[]>
+}
+export interface UpdateMemberFriendRepository {
+    (friendId: string, memberId: string): Promise<void>
+}
+export interface UpdateDrawDateRepository {
+    (groupId: string): Promise<void>
+}
+export interface GetOwnerIdAndDrawDateRepository {
+    (groupId: string): Promise<{ drawDate: Date | null; ownerId: string; }>
+}
+//#endregion
+
+export async function listGroup(listGroup: ListGroupRepository, search: { message?: string }): Promise<GroupSelected[]> {
+    return await listGroup(search);
 }
 
 export async function createGroup(
+    createGroup: CreateGroupRepository,
     user: {
         id: string,
     },
@@ -17,14 +78,17 @@ export async function createGroup(
         maximumExpectedPrice: number | null,
     },
 ): Promise<GroupSelected> {
-    return await repository.createGroup(user, data);
+    return await createGroup(user, data);
 }
 
-export async function getGroup(groupId: string): Promise<GroupSelected> {
-    return await repository.getGroup(groupId);
+export async function getGroup(getGroup: GetGroupRepository, groupId: string): Promise<GroupSelected> {
+    return await getGroup(groupId);
 }
 
 export async function updateGroup(
+    getOwnerIdAndDrawDate: GetOwnerIdAndDrawDateRepository,
+    updateGroup: UpdateGroupRepository,
+    getGroup: GetGroupRepository,
     user: {
         id: string,
     },
@@ -35,22 +99,30 @@ export async function updateGroup(
         maximumExpectedPrice?: number | null,
     },
 ): Promise<GroupSelected> {
-    await assertCanMutateAndIsOwnerOfGroup(groupId, user.id);
-    await repository.updateGroup(groupId, data);
-    return await repository.getGroup(groupId);
+    const { drawDate, ownerId } = await getOwnerIdAndDrawDate(groupId);
+    if (drawDate) throw new GroupAlreadyDrawnError();
+    if (ownerId != user.id) throw new NotGroupOwnerError();
+    await updateGroup(groupId, data);
+    return await getGroup(groupId);
 }
 
 export async function deleteGroup(
+    getOwnerIdAndDrawDate: GetOwnerIdAndDrawDateRepository,
+    deleteGroup: DeleteGroupRepository,
     user: {
         id: string,
     },
     groupId: string,
 ): Promise<void> {
-    await assertIsOwnerOfGroup(groupId, user.id);
-    await repository.deleteGroup(groupId);
+    const { ownerId } = await getOwnerIdAndDrawDate(groupId);
+    if (ownerId != user.id) throw new NotGroupOwnerError();
+    await deleteGroup(groupId);
 }
 
 export async function joinGroup(
+    getOwnerIdAndDrawDate: GetOwnerIdAndDrawDateRepository,
+    isMember: IsMemberRepository,
+    createMemberRelationship: CreateMemberRelationshipRepository,
     user: {
         id: string,
     },
@@ -60,31 +132,41 @@ export async function joinGroup(
         presentOffered: string,
     },
 ): Promise<void> {
-    await assertCanMutateGroup(groupId);
-    if (await repository.isMember(user.id, groupId)) {
+    const { drawDate } = await getOwnerIdAndDrawDate(groupId);
+    if (drawDate) throw new GroupAlreadyDrawnError();
+    if (await isMember(user.id, groupId)) {
         throw new AlreadyInGroupError();
     }
-    await repository.createMemberRelationship(user.id, groupId, data);
+    await createMemberRelationship(user.id, groupId, data);
 }
 
 export async function leaveGroup(
+    getOwnerIdAndDrawDate: GetOwnerIdAndDrawDateRepository,
+    deleteMember: DeleteMemberRepository,
     user: {
         id: string,
     },
     groupId: string,
 ): Promise<void> {
-    await assertCanMutateGroup(groupId);
-    await repository.deleteMember(user.id, groupId);
+    const { drawDate } = await getOwnerIdAndDrawDate(groupId);
+    if (drawDate) throw new GroupAlreadyDrawnError();
+    await deleteMember(user.id, groupId);
 }
 
 export async function drawGroup(
+    getOwnerIdAndDrawDate: GetOwnerIdAndDrawDateRepository,
+    listMemberIdsOfGroup: ListMemberIdsOfGroupRepository,
+    updateMemberFriend: UpdateMemberFriendRepository,
+    updateDrawDate: UpdateDrawDateRepository,
     user: {
         id: string,
     },
     groupId: string,
 ): Promise<void> {
-    await assertCanMutateAndIsOwnerOfGroup(groupId, user.id);
-    const memberIds = await repository.listMemberIdsOfGroup(groupId);
+    const { drawDate, ownerId } = await getOwnerIdAndDrawDate(groupId);
+    if (drawDate) throw new GroupAlreadyDrawnError();
+    if (ownerId != user.id) throw new NotGroupOwnerError();
+    const memberIds = await listMemberIdsOfGroup(groupId);
     if (memberIds.length < 3) throw new NotEnoughMembersToDrawError();
 
     const friends = Array.from(memberIds);
@@ -98,35 +180,8 @@ export async function drawGroup(
     } while (memberIds.some((member, index) => member == friends[index]));
 
     await Promise.all(memberIds.map((memberId, index) => (
-        repository.updateMemberFriend(memberId, friends[index])
+        updateMemberFriend(memberId, friends[index])
     )));
 
-    await repository.updateDrawDate(groupId);
-}
-
-async function assertCanMutateGroup(groupId: string) {
-    const group = await prisma.group.findUnique({
-        select: {
-            drawDate: true,
-        },
-        where: {
-            id: groupId,
-            deletedAt: null
-        }
-    });
-    if (!group) throw new GroupByIdNotFoundError();
-    if (group.drawDate) throw new GroupAlreadyDrawnError();
-}
-
-async function assertIsOwnerOfGroup(groupId: string, ownerId: string) {
-    const group = await repository.getOwnerIdAndDrawDate(groupId);
-    if (!group) throw new GroupByIdNotFoundError();
-    if (group.ownerId != ownerId) throw new NotGroupOwnerError();
-}
-
-async function assertCanMutateAndIsOwnerOfGroup(groupId: string, ownerId: string) {
-    const group = await repository.getOwnerIdAndDrawDate(groupId);
-    if (!group) throw new GroupByIdNotFoundError();
-    if (group.ownerId != ownerId) throw new NotGroupOwnerError();
-    if (group.drawDate) throw new GroupAlreadyDrawnError();
+    await updateDrawDate(groupId);
 }

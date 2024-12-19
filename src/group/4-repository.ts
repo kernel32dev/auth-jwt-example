@@ -1,51 +1,5 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "../db";
+import { groupSelect, GroupSelected, prisma } from "../db";
 import { GroupByIdNotFoundError, NotInGroupError } from "./error";
-
-export const groupSelect = {
-    id: true,
-    drawDate: true,
-    owner: {
-        select: {
-            name: true,
-        },
-    },
-    members: {
-        select: {
-            user: {
-                select: {
-                    name: true,
-                },
-            },
-        },
-        where: {
-            deletedAt: null
-        },
-    },
-    message: true,
-    maximumExpectedPrice: true,
-    minimumExpectedPrice: true,
-    createdAt: true,
-    updatedAt: true,
-} satisfies Prisma.GroupSelect;
-
-export type GroupSelected = {
-    id: string,
-    drawDate: Date | null,
-    owner: {
-        name: string,
-    },
-    members: {
-        user: {
-            name: string,
-        },
-    }[],
-    message: string,
-    maximumExpectedPrice: number | null,
-    minimumExpectedPrice: number | null,
-    createdAt: Date,
-    updatedAt: Date,
-};
 
 export async function listGroup(search: { message?: string }): Promise<GroupSelected[]> {
     return await prisma.group.findMany({
@@ -108,9 +62,7 @@ export async function updateGroup(
     if (count == 0) throw new GroupByIdNotFoundError();
 }
 
-export async function deleteGroup(
-    groupId: string,
-): Promise<void> {
+export async function deleteGroup(groupId: string): Promise<void> {
     const { count } = await prisma.group.updateMany({
         data: {
             deletedAt: new Date()
@@ -206,8 +158,8 @@ export async function updateDrawDate(groupId: string): Promise<void> {
     });
 }
 
-export async function getOwnerIdAndDrawDate(groupId: string): Promise<{ drawDate: Date | null; ownerId: string; } | null> {
-    return await prisma.group.findUnique({
+export async function getOwnerIdAndDrawDate(groupId: string): Promise<{ drawDate: Date | null; ownerId: string; }> {
+    const group = await prisma.group.findUnique({
         select: {
             drawDate: true,
             ownerId: true,
@@ -217,4 +169,6 @@ export async function getOwnerIdAndDrawDate(groupId: string): Promise<{ drawDate
             deletedAt: null
         }
     });
+    if (!group) throw new GroupByIdNotFoundError();
+    return group;
 }

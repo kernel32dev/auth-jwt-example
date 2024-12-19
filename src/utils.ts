@@ -1,13 +1,5 @@
 import type { ZodType, ZodTypeDef } from "zod";
-import { StatusException } from "./error";
-
-export const OK = 200;
-export const BAD_REQUEST = 400;
-export const UNAUTHORIZED = 401;
-export const FORBIDDEN = 403;
-export const NOT_FOUND = 404;
-export const CONFLICT = 409;
-export const INTERNAL_SERVER_ERROR = 500;
+import { BAD_REQUEST, StatusException } from "./error";
 
 export function getEnv(name: string): string {
     const value = process.env[name];
@@ -21,18 +13,10 @@ export function validate<A, B extends ZodTypeDef, C>(data: unknown, validator: Z
     if (!result.success) {
         console.error(result.error);
         throw new StatusException(BAD_REQUEST, {
-            error: "zod_error",
+            error: "ZodError",
             description: "ocorreu um erro ao validar o request com zod",
             zod: result.error.errors,
         });
     }
     return result.data;
-}
-
-export function unreachable(message?: string): never {
-    throw new Error(
-        message
-            ? "não era para ser possível chegar aqui, pois: " + message
-            : "não era para ser possível chegar aqui"
-    );
 }

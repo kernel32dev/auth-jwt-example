@@ -12,26 +12,36 @@ app.use(express.json({ limit: "10mb" }));
 app.use(auth.routes.routes(
     auth.controller.signin.bind(null, 
         auth.service.signin.bind(null,
-            auth.repository.userWithEmailExists
+            auth.repository.userWithEmailExists,
+            auth.service.jwtSignService,
+            auth.service.genPasswordSalt,
+            auth.service.hashPassword,
         )
     ),
     auth.controller.signoff.bind(null, 
         auth.service.signoff.bind(null,
             auth.repository.getUserByEmail,
             auth.repository.deleteUser,
+            auth.service.hashPassword,
         )
     ),
     auth.controller.login.bind(null,
         auth.service.login.bind(null,
             auth.repository.getUserByEmail,
+            auth.service.jwtSignService,
+            auth.service.hashPassword,
         )
     ),
     auth.controller.refresh.bind(null,
-        auth.service.refresh
+        auth.service.refresh.bind(null,
+            auth.service.jwtVerify,
+        )
     ),
 ));
 app.use(catchApiExceptions(auth.controller.middleware(
-    auth.service.refresh
+    auth.service.refresh.bind(null,
+        auth.service.jwtVerify
+    )
 )));
 app.use(groupRoutes);
 

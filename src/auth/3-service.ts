@@ -23,6 +23,27 @@ export interface GetUserByEmailRepository {
 export interface DeleteUserRepository {
     (userId: string): Promise<void>
 }
+export interface JwtSignService {
+    (user: {
+        id: string;
+        email: string;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+    }): Promise<{
+        token_refresh: string;
+        token_access: string;
+    }>
+}
+export interface JwtVerifyService {
+    (token: string): Promise<unknown>
+}
+export interface PasswordHashingService {
+    (plainText: string, salt: string): Promise<string>
+}
+export interface PasswordSaltService {
+    (): Promise<string>
+}
 //#endregion
 
 //#region constants
@@ -57,6 +78,9 @@ const passwordHashingConfig = {
 
 export async function signin(
     userWithEmailExists: UserWithEmailExistsRepository,
+    jwtSign: JwtSignService,
+    genPasswordSalt: PasswordSaltService,
+    hashPassword: PasswordHashingService,
     name: string,
     email: string,
     plainTextPassword: string,
@@ -65,7 +89,7 @@ export async function signin(
         throw new EmailAlreadyUsedError();
     }
 
-    const passwordSalt = genPasswordSalt();
+    const passwordSalt = await genPasswordSalt();
     const password = await hashPassword(plainTextPassword, passwordSalt);
     const user = await prisma.user.create({
         data: {
@@ -76,7 +100,7 @@ export async function signin(
         },
     });
 
-    const tokens = await signTokens(user);
+    const tokens = await jwtSign(user);
     return {
         id: user.id,
         email: user.email,
@@ -88,6 +112,7 @@ export async function signin(
 export async function signoff(
     getUserByEmail: GetUserByEmailRepository,
     deleteUser: DeleteUserRepository,
+    hashPassword: PasswordHashingService,
     email: string,
     plainTextPassword: string,
 ): Promise<void> {
@@ -102,6 +127,8 @@ export async function signoff(
 
 export async function login(
     getUserByEmail: GetUserByEmailRepository,
+    jwtSignService: JwtSignService,
+    hashPassword: PasswordHashingService,
     email: string,
     plainTextPassword: string,
 ) {
@@ -111,7 +138,7 @@ export async function login(
     const password = await hashPassword(plainTextPassword, user.passwordSalt);
     if (user.password != password) throw new BadCredentialsError();
 
-    const tokens = await signTokens(user);
+    const tokens = await jwtSignService(user);
     return {
         id: user.id,
         email: user.email,
@@ -120,12 +147,11 @@ export async function login(
     };
 }
 
-export async function refresh(token: string) {
-    const [verifyErr, payload] = await jwtVerifiy(token);
+export async function refresh(jwtVerify: JwtVerifyService, token: string) {
+    const payload = await jwtVerify(token);
 
     const parsed = refreshToken.safeParse(payload);
-
-    if (verifyErr || !parsed.success) {
+    if (!parsed.success) {
         throw new InvalidTokenError();
     }
 
@@ -139,7 +165,7 @@ export async function refresh(token: string) {
         throw new InvalidTokenError();
     }
 
-    const tokens = await signTokens(user);
+    const tokens = await jwtSignService(user);
     return {
         id: user.id,
         email: user.email,
@@ -148,15 +174,13 @@ export async function refresh(token: string) {
     };
 }
 
-export async function access(token: string) {
-    
-    const [verifyErr, payload] = await jwtVerifiy(token);
+export async function access(jwtVerify: JwtVerifyService, token: string) {
+
+    const payload = await jwtVerify(token);
 
     const parsed = accessToken.safeParse(payload);
-
-    if (verifyErr || !parsed.success) {
-        if (verifyErr) console.warn(verifyErr);
-        if (!parsed.success) console.warn(parsed.error);
+    if (!parsed.success) {
+        console.warn(parsed.error);
         throw new InvalidTokenError();
     }
 
@@ -171,13 +195,16 @@ export async function access(token: string) {
 
 //#region jwt
 
-async function signTokens(user: {
+export async function jwtSignService(user: {
     id: string;
     email: string;
     name: string;
     createdAt: Date;
     updatedAt: Date;
-}) {
+}): Promise<{
+    token_refresh: string;
+    token_access: string;
+}> {
     const accessTokenData = {
         type: "access",
         id: user.id,
@@ -198,41 +225,39 @@ async function signTokens(user: {
         token_refresh: await token_refresh,
         token_access: await token_access,
     };
-}
-
-function jwtVerifiy(token: string) {
-    return new Promise<
-        [jwt.VerifyErrors, null] | [null, string | jwt.JwtPayload]
-    >((resolve) => {
-        jwt.verify(token, jwtSecret, (err, payload) => {
-            if (err) {
-                resolve([err, null]);
-                return;
-            }
-            if (payload === undefined) {
-                resolve([
-                    new jwt.JsonWebTokenError("jwt verification failed with no error"),
-                    null,
-                ]);
-                return;
-            }
-            resolve([null, payload]);
+    function jwtSign(payload: string | Buffer | object, options: jwt.SignOptions) {
+        return new Promise<string>((resolve, reject) => {
+            jwt.sign(payload, jwtSecret, options, (err, token) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                if (token === undefined) {
+                    reject(new Error("jwt signing failed with no error"));
+                    return;
+                }
+                resolve(token);
+            });
         });
-    });
+    }
 }
 
-function jwtSign(payload: string | Buffer | object, options: jwt.SignOptions) {
-    return new Promise<string>((resolve, reject) => {
-        jwt.sign(payload, jwtSecret, options, (err, token) => {
-            if (err) {
-                reject(err);
+export function jwtVerify(token: string) {
+    return new Promise<unknown>((resolve, reject) => {
+        jwt.verify(token, jwtSecret, (err, payload) => {
+            if (err || payload === undefined) {
+                reject(new InvalidTokenError());
                 return;
             }
-            if (token === undefined) {
-                reject(new Error("jwt signing failed with no error"));
-                return;
+            if (typeof payload == "string") {
+                try {
+                    payload = JSON.parse(payload);
+                } catch (e) {
+                    reject(new InvalidTokenError());
+                    return;
+                }
             }
-            resolve(token);
+            resolve(payload);
         });
     });
 }
@@ -241,28 +266,25 @@ function jwtSign(payload: string | Buffer | object, options: jwt.SignOptions) {
 
 //#region password hashing
 
-export function genPasswordSalt(): string {
+export async function genPasswordSalt(): Promise<string> {
     return randomBytes(8).toString("base64url");
 }
 
-export function hashPassword(
-    plainText: string,
-    passwordSalt: string
-): Promise<string> {
+export function hashPassword(plainText: string, salt: string): Promise<string> {
     const {
         pepper: passwordPepper,
         iterations,
         keyLength,
         digest,
     } = passwordHashingConfig;
-    const salt = Buffer.concat([
+    const fullSalt = Buffer.concat([
         Buffer.from(passwordPepper),
-        Buffer.from(passwordSalt),
+        Buffer.from(salt),
     ]);
     return new Promise((resolve, reject) => {
         pbkdf2(
             plainText,
-            salt,
+            fullSalt,
             iterations,
             keyLength,
             digest,

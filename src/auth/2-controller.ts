@@ -2,14 +2,13 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { validate } from "../utils";
 import type { User } from "@prisma/client";
-import { RequestHandler, RouteParameters } from "express-serve-static-core";
-import * as service from "./3-service";
+import type { RequestHandler, RouteParameters } from "express-serve-static-core";
 import { NoTokenError } from "./error";
 
 declare global {
     namespace Express {
         interface Request {
-            user: Pick<User, "id" | "name" | "email" | "createdAt" | "updatedAt">,
+            user: Pick<User, "id" | "name" | "email">,
         }
     }
 }
@@ -116,7 +115,7 @@ export function middleware(access: AccessService): RequestHandler<RouteParameter
         }
         const token = authorization.substring(7);
     
-        req.user = await service.access(token);
+        req.user = await access(token);
         
         next();
     };

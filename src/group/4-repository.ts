@@ -142,7 +142,9 @@ export async function createMemberRelationship(
     },
 ): Promise<void> {
     await prisma.member.create({
-        select: {},
+        select: {
+            id: true,
+        },
         data: {
             userId,
             groupId,
@@ -155,7 +157,7 @@ export async function createMemberRelationship(
 export async function deleteMember(userId: string, groupId: string): Promise<void> {
     const { count } = await prisma.member.updateMany({
         data: {
-            deletedAt: null
+            deletedAt: new Date()
         },
         where: {
             userId,
@@ -192,7 +194,9 @@ export async function updateMemberFriend(friendId: string, memberId: string): Pr
 
 export async function updateDrawDate(groupId: string): Promise<void> {
     await prisma.group.update({
-        select: {},
+        select: {
+            id: true,
+        },
         data: {
             drawDate: new Date(),
         },

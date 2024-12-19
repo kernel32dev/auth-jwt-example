@@ -35,3 +35,9 @@ export class NotEnoughMembersToDrawError extends AppError {
         super(CONFLICT, "NotEnoughMembersToDrawError", description);
     }
 }
+
+export class GroupNotDrawnError extends AppError {
+    constructor(description?: string) {
+        super(NOT_FOUND, "GroupNotDrawnError", description);
+    }
+}

@@ -15,6 +15,7 @@ export const repository = {
     updateMemberFriend,
     updateDrawDate,
     getOwnerIdAndDrawDate,
+    getFriendPresentOfMember,
 };
 
 export async function listGroup(search: { message?: string }): Promise<GroupSelected[]> {
@@ -187,4 +188,29 @@ export async function getOwnerIdAndDrawDate(groupId: string): Promise<{ drawDate
     });
     if (!group) throw new GroupByIdNotFoundError();
     return group;
+}
+
+export async function getFriendPresentOfMember(userId: string, groupId: string): Promise<string | null> {
+    const friend = await prisma.member.findFirst({
+        select: {
+            friendId: true
+        },
+        where: {
+            userId,
+            groupId,
+            deletedAt: null
+        },
+    });
+    if (!friend || !friend.friendId) return null;
+    const member = await prisma.member.findFirst({
+        select: {
+            presentOffered: true
+        },
+        where: {
+            userId: friend.friendId,
+            groupId,
+        },
+    });
+    if (!member) return null;
+    return member.presentOffered;
 }

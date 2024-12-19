@@ -17,6 +17,7 @@ export function routes(controller: {
     getGroup: ControllerWithGroupId,
     updateGroup: ControllerWithGroupId,
     deleteGroup: ControllerWithGroupId,
+    getPresent: ControllerWithGroupId,
     joinGroup: ControllerWithGroupId,
     leaveGroup: ControllerWithGroupId,
     drawGroup: ControllerWithGroupId,
@@ -29,6 +30,7 @@ export function routes(controller: {
     routes.put("/group/:group_id", api(controller.updateGroup));
     routes.delete("/group/:group_id", api(controller.deleteGroup));
 
+    routes.get("/group/:group_id/present", api(controller.getPresent));
     routes.post("/group/:group_id/join", api(controller.joinGroup));
     routes.post("/group/:group_id/leave", api(controller.leaveGroup));
     routes.post("/group/:group_id/draw", api(controller.drawGroup));

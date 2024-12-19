@@ -1,4 +1,4 @@
-import { AlreadyInGroupError, GroupAlreadyDrawnError, GroupByIdNotFoundError, NotEnoughMembersToDrawError, NotGroupOwnerError } from "./error";
+import { AlreadyInGroupError, GroupAlreadyDrawnError, GroupByIdNotFoundError, GroupNotDrawnError, NotEnoughMembersToDrawError, NotGroupOwnerError } from "./error";
 import { GroupSelected } from "../db";
 import { repository as defaultRepository } from "./4-repository";
 
@@ -62,6 +62,9 @@ export interface UpdateDrawDateRepository {
 export interface GetOwnerIdAndDrawDateRepository {
     (groupId: string): Promise<{ drawDate: Date | null; ownerId: string; }>
 }
+export interface GetFriendPresentOfMemberRepository {
+    (userId: string, groupId: string): Promise<string | null>
+}
 //#endregion
 
 export function service(repository: {
@@ -77,6 +80,7 @@ export function service(repository: {
     updateMemberFriend: UpdateMemberFriendRepository,
     updateDrawDate: UpdateDrawDateRepository,
     getOwnerIdAndDrawDate: GetOwnerIdAndDrawDateRepository,
+    getFriendPresentOfMember: GetFriendPresentOfMemberRepository
 } = defaultRepository) {
     return {
         listGroup: listGroup.bind(null, repository.listGroup),
@@ -84,6 +88,7 @@ export function service(repository: {
         getGroup: getGroup.bind(null, repository.getGroup),
         updateGroup: updateGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.updateDrawDate, repository.getGroup),
         deleteGroup: deleteGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.deleteGroup),
+        getPresent: getPresent.bind(null, repository.getFriendPresentOfMember),
         joinGroup: joinGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.isMember, repository.createMemberRelationship),
         leaveGroup: leaveGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.deleteMember),
         drawGroup: drawGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.listMemberIdsOfGroup, repository.updateMemberFriend, repository.updateDrawDate),
@@ -144,6 +149,18 @@ export async function deleteGroup(
     const { ownerId } = await getOwnerIdAndDrawDate(groupId);
     if (ownerId != user.id) throw new NotGroupOwnerError();
     await deleteGroup(groupId);
+}
+
+export async function getPresent(
+    getFriendPresentOfMember: GetFriendPresentOfMemberRepository,
+    user: {
+        id: string,
+    },
+    groupId: string,
+): Promise<string> {
+    const present = await getFriendPresentOfMember(user.id, groupId);
+    if (present === null) throw new GroupNotDrawnError();
+    return present;
 }
 
 export async function joinGroup(

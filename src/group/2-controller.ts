@@ -44,6 +44,14 @@ export interface DeleteGroupService {
         groupId: string,
     ): Promise<void>
 }
+export interface GetPresentService {
+    (
+        user: {
+            id: string,
+        },
+        groupId: string,
+    ): Promise<string>
+}
 export interface JoinGroupService {
     (
         user: {
@@ -80,6 +88,7 @@ export function controller(service: {
     getGroup: GetGroupService,
     updateGroup: UpdateGroupService,
     deleteGroup: DeleteGroupService,
+    getPresent: GetPresentService,
     joinGroup: JoinGroupService,
     leaveGroup: LeaveGroupService,
     drawGroup: DrawGroupService,
@@ -90,6 +99,7 @@ export function controller(service: {
         getGroup: getGroup.bind(null, service.getGroup),
         updateGroup: updateGroup.bind(null, service.updateGroup),
         deleteGroup: deleteGroup.bind(null, service.deleteGroup),
+        getPresent: getPresent.bind(null, service.getPresent),
         joinGroup: joinGroup.bind(null, service.joinGroup),
         leaveGroup: leaveGroup.bind(null, service.leaveGroup),
         drawGroup: drawGroup.bind(null, service.drawGroup),
@@ -128,6 +138,10 @@ export async function updateGroup(updateGroup: UpdateGroupService, req: Request<
 export async function deleteGroup(deleteGroup: DeleteGroupService, req: Request<{ group_id: string }>, res: Response) {
     await deleteGroup(req.user, req.params.group_id);
     res.json({});
+}
+
+export async function getPresent(getFriendGroup: GetPresentService, req: Request<{ group_id: string }>, res: Response) {
+    res.json(await getFriendGroup(req.user, req.params.group_id));
 }
 
 export async function joinGroup(joinGroup: JoinGroupService, req: Request<{ group_id: string }>, res: Response) {

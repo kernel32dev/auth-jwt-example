@@ -39,7 +39,7 @@ app.use(auth.routes.routes(
     ),
 ));
 app.use(catchApiExceptions(auth.controller.middleware(
-    auth.service.refresh.bind(null,
+    auth.service.access.bind(null,
         auth.service.jwtVerify
     )
 )));

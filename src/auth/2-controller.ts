@@ -8,7 +8,7 @@ import { NoTokenError } from "./error";
 declare global {
     namespace Express {
         interface Request {
-            user: Pick<User, "id" | "name" | "email">,
+            user: Pick<User, "id" | "name" | "email" | "createdAt" | "updatedAt">,
         }
     }
 }
@@ -47,11 +47,11 @@ export interface RefreshService {
 }
 export interface AccessService {
     (token: string): Promise<{
-        token_refresh: string;
-        token_access: string;
         id: string;
         email: string;
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
     }>
 }
 //#endregion
@@ -87,8 +87,7 @@ export async function login(login: LoginService, req: Request, res: Response) {
         email: z.string().min(1).email(),
         password: z.string().min(1),
     }));
-    await login(body.email, body.password);
-    res.json({});
+    res.json(await login(body.email, body.password));
 }
 
 export async function refresh(refresh: RefreshService, req: Request, res: Response) {
@@ -100,7 +99,7 @@ export async function refresh(refresh: RefreshService, req: Request, res: Respon
         throw new NoTokenError();
     }
     const token = authorization.substring(7);
-    await refresh(token);
+    res.json(await refresh(token));
 
 }
 

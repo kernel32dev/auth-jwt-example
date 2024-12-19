@@ -36,9 +36,10 @@ export async function getUserByEmail(email: string): Promise<{
 }
 
 export async function deleteUser(userId: string): Promise<void> {
+    console.log(userId);
     await prisma.user.update({
         data: {
-            deletedAt: null
+            deletedAt: new Date()
         },
         where: {
             id: userId,

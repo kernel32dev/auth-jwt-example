@@ -1,0 +1,60 @@
+generator client {
+    provider   = "prisma-client-js"
+    engineType = "library"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+    id           String @id @default(cuid())
+    email        String
+    name         String
+    password     String
+    passwordSalt String
+
+    groups      Group[]
+    friends     Member[] @relation(name: "friend")
+    memberships Member[] @relation(name: "member")
+
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+}
+
+model Member {
+    id       String  @id @default(cuid())
+    wish     String
+    friendId String?
+    friend   User?   @relation(name: "friend", fields: [friendId], references: [id])
+
+    userId  String
+    user    User   @relation(name: "member", fields: [userId], references: [id])
+    groupId String
+    group   Group  @relation(fields: [groupId], references: [id])
+
+    presentOffered String
+
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+}
+
+model Group {
+    id                   String    @id @default(cuid())
+    drawDate             DateTime?
+    message              String
+    maximumExpectedPrice Float?
+    minimumExpectedPrice Float?
+
+    ownerId String
+    owner   User   @relation(fields: [ownerId], references: [id])
+
+    members Member[]
+
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+}

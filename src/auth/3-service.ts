@@ -2,9 +2,28 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../db";
 import { getEnv } from "../utils";
-import * as repository from "./4-repository";
 import { BadCredentialsError, EmailAlreadyUsedError, InvalidTokenError } from "./error";
 import { pbkdf2, randomBytes } from "node:crypto";
+
+//#region dependencies
+export interface UserWithEmailExistsRepository {
+    (email: string): Promise<boolean>
+}
+export interface GetUserByEmailRepository {
+    (email: string): Promise<{
+        id: string,
+        email: string,
+        name: string,
+        password: string,
+        passwordSalt: string,
+        createdAt: Date,
+        updatedAt: Date,
+    } | null>
+}
+export interface DeleteUserRepository {
+    (userId: string): Promise<void>
+}
+//#endregion
 
 //#region constants
 
@@ -37,11 +56,12 @@ const passwordHashingConfig = {
 //#endregion
 
 export async function signin(
+    userWithEmailExists: UserWithEmailExistsRepository,
     name: string,
     email: string,
     plainTextPassword: string,
 ) {
-    if (await repository.userWithEmailExists(email)) {
+    if (await userWithEmailExists(email)) {
         throw new EmailAlreadyUsedError();
     }
 
@@ -66,21 +86,26 @@ export async function signin(
 }
 
 export async function signoff(
+    getUserByEmail: GetUserByEmailRepository,
+    deleteUser: DeleteUserRepository,
     email: string,
     plainTextPassword: string,
 ): Promise<void> {
-    const user = await repository.getUserByEmail(email);
+    const user = await getUserByEmail(email);
     if (!user) throw new BadCredentialsError();
 
     const password = await hashPassword(plainTextPassword, user.passwordSalt);
     if (user.password != password) throw new BadCredentialsError();
+
+    await deleteUser(user.id);
 }
 
 export async function login(
+    getUserByEmail: GetUserByEmailRepository,
     email: string,
     plainTextPassword: string,
 ) {
-    const user = await repository.getUserByEmail(email);
+    const user = await getUserByEmail(email);
     if (!user) throw new BadCredentialsError();
 
     const password = await hashPassword(plainTextPassword, user.passwordSalt);

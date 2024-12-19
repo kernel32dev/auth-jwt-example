@@ -34,6 +34,7 @@ export async function getUserByEmail(email: string): Promise<{
         },
     });
 }
+
 export async function deleteUser(userId: string): Promise<void> {
     await prisma.user.update({
         data: {

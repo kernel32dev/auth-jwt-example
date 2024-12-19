@@ -1,14 +1,24 @@
-import { Router } from "express";
-import { login, refresh, signin, signoff } from "./2-controller";
+import { Router, Request, Response } from "express";
 import { catchApiExceptions as api } from "../error";
 
-export const routes = Router();
+//#region dependencies
+export interface Controller {
+    (req: Request, res: Response): void;
+}
+//#endregion
 
-routes.get("/ping", (req, res) => {
-    res.send("pong");
-});
+export function routes(
+    signin: Controller,
+    signoff: Controller,
+    login: Controller,
+    refresh: Controller,
+) {
+    const routes = Router();
 
-routes.post("/signin", api(signin));
-routes.post("/signoff", api(signoff));
-routes.post("/login", api(login));
-routes.post("/refresh", api(refresh));
+    routes.post("/signin", api(signin));
+    routes.post("/signoff", api(signoff));
+    routes.post("/login", api(login));
+    routes.post("/refresh", api(refresh));
+
+    return routes;
+}

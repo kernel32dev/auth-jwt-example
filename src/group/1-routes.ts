@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { catchApiExceptions as api } from "../error";
+import { controller as defaultController } from "./2-controller";
 
 //#region dependencies
 export interface Controller {
@@ -10,7 +11,7 @@ export interface ControllerWithGroupId {
 }
 //#endregion
 
-export function routes(
+export function routes(controller: {
     listGroup: Controller,
     createGroup: Controller,
     getGroup: ControllerWithGroupId,
@@ -19,18 +20,18 @@ export function routes(
     joinGroup: ControllerWithGroupId,
     leaveGroup: ControllerWithGroupId,
     drawGroup: ControllerWithGroupId,
-) {
+} = defaultController()) {
     const routes = Router();
 
-    routes.get("/group", api(listGroup));
-    routes.post("/group", api(createGroup));
-    routes.get("/group/:group_id", api(getGroup));
-    routes.put("/group/:group_id", api(updateGroup));
-    routes.delete("/group/:group_id", api(deleteGroup));
+    routes.get("/group", api(controller.listGroup));
+    routes.post("/group", api(controller.createGroup));
+    routes.get("/group/:group_id", api(controller.getGroup));
+    routes.put("/group/:group_id", api(controller.updateGroup));
+    routes.delete("/group/:group_id", api(controller.deleteGroup));
 
-    routes.post("/group/:group_id/join", api(joinGroup));
-    routes.post("/group/:group_id/leave", api(leaveGroup));
-    routes.post("/group/:group_id/draw", api(drawGroup));
+    routes.post("/group/:group_id/join", api(controller.joinGroup));
+    routes.post("/group/:group_id/leave", api(controller.leaveGroup));
+    routes.post("/group/:group_id/draw", api(controller.drawGroup));
 
     return routes;
 }

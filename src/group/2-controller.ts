@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { validate } from "../utils";
 import { GroupSelected } from "../db";
+import { service as defaultService } from "./3-service";
 
 //#region dependencies
 export interface ListGroupService {
@@ -72,6 +73,28 @@ export interface DrawGroupService {
     ): Promise<void>
 }
 //#endregion
+
+export function controller(service: {
+    listGroup: ListGroupService,
+    createGroup: CreateGroupService,
+    getGroup: GetGroupService,
+    updateGroup: UpdateGroupService,
+    deleteGroup: DeleteGroupService,
+    joinGroup: JoinGroupService,
+    leaveGroup: LeaveGroupService,
+    drawGroup: DrawGroupService,
+} = defaultService()) {
+    return {
+        listGroup: listGroup.bind(null, service.listGroup),
+        createGroup: createGroup.bind(null, service.createGroup),
+        getGroup: getGroup.bind(null, service.getGroup),
+        updateGroup: updateGroup.bind(null, service.updateGroup),
+        deleteGroup: deleteGroup.bind(null, service.deleteGroup),
+        joinGroup: joinGroup.bind(null, service.joinGroup),
+        leaveGroup: leaveGroup.bind(null, service.leaveGroup),
+        drawGroup: drawGroup.bind(null, service.drawGroup),
+    };
+}
 
 export async function listGroup(listGroup: ListGroupService, req: Request, res: Response) {
     const query = validate(req.query, z.object({

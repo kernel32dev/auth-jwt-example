@@ -1,5 +1,12 @@
 import { prisma } from "../db";
 
+export const repository = {
+    userWithEmailExists,
+    getUserById,
+    getUserByEmail,
+    deleteUser,
+};
+
 export async function userWithEmailExists(email: string): Promise<boolean> {
     return await prisma.user.count({
         where: {
@@ -7,6 +14,32 @@ export async function userWithEmailExists(email: string): Promise<boolean> {
             deletedAt: null
         },
     }) != 0;
+}
+
+export async function getUserById(id: string): Promise<{
+    id: string,
+    email: string,
+    name: string,
+    password: string,
+    passwordSalt: string,
+    createdAt: Date,
+    updatedAt: Date,
+} | null> {
+    return await prisma.user.findUnique({
+        select: {
+            id: true,
+            email: true,
+            name: true,
+            password: true,
+            passwordSalt: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+        where: {
+            id,
+            deletedAt: null,
+        },
+    });
 }
 
 export async function getUserByEmail(email: string): Promise<{

@@ -1,5 +1,21 @@
+import { Prisma } from "@prisma/client";
 import { groupSelect, GroupSelected, prisma } from "../db";
 import { GroupByIdNotFoundError, NotInGroupError } from "./error";
+
+export const repository = {
+    listGroup,
+    createGroup,
+    getGroup,
+    updateGroup,
+    deleteGroup,
+    isMember,
+    createMemberRelationship,
+    deleteMember,
+    listMemberIdsOfGroup,
+    updateMemberFriend,
+    updateDrawDate,
+    getOwnerIdAndDrawDate,
+};
 
 export async function listGroup(search: { message?: string }): Promise<GroupSelected[]> {
     return await prisma.group.findMany({

@@ -4,6 +4,7 @@ import { validate } from "../utils";
 import type { User } from "@prisma/client";
 import type { RequestHandler, RouteParameters } from "express-serve-static-core";
 import { NoTokenError } from "./error";
+import { service as defaultService } from "./3-service";
 
 declare global {
     namespace Express {
@@ -56,6 +57,20 @@ export interface AccessService {
 }
 //#endregion
 
+export function controller(service: {
+    signin: SigninService,
+    signoff: SignoffService,
+    login: LoginService,
+    refresh: RefreshService,
+} = defaultService()) {
+    return {
+        signin: signin.bind(null, service.signin),
+        signoff: signoff.bind(null, service.signoff),
+        login: login.bind(null, service.login),
+        refresh: refresh.bind(null, service.refresh),
+    }
+}
+
 export async function signin(
     signin: SigninService,
     req: Request,
@@ -103,7 +118,7 @@ export async function refresh(refresh: RefreshService, req: Request, res: Respon
 
 }
 
-export function middleware(access: AccessService): RequestHandler<RouteParameters<string>> {
+export function middleware(access: AccessService = defaultService().access): RequestHandler<RouteParameters<string>> {
     return async (req, res, next) => {
         const authorization = req.headers.authorization || "";
         if (

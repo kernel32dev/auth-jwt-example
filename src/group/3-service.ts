@@ -1,5 +1,6 @@
 import { AlreadyInGroupError, GroupAlreadyDrawnError, GroupByIdNotFoundError, NotEnoughMembersToDrawError, NotGroupOwnerError } from "./error";
 import { GroupSelected } from "../db";
+import { repository as defaultRepository } from "./4-repository";
 
 //#region dependencies
 export interface ListGroupRepository {
@@ -62,6 +63,32 @@ export interface GetOwnerIdAndDrawDateRepository {
     (groupId: string): Promise<{ drawDate: Date | null; ownerId: string; }>
 }
 //#endregion
+
+export function service(repository: {
+    listGroup: ListGroupRepository,
+    createGroup: CreateGroupRepository,
+    getGroup: GetGroupRepository,
+    updateGroup: UpdateGroupRepository,
+    deleteGroup: DeleteGroupRepository,
+    isMember: IsMemberRepository,
+    createMemberRelationship: CreateMemberRelationshipRepository,
+    deleteMember: DeleteMemberRepository,
+    listMemberIdsOfGroup: ListMemberIdsOfGroupRepository,
+    updateMemberFriend: UpdateMemberFriendRepository,
+    updateDrawDate: UpdateDrawDateRepository,
+    getOwnerIdAndDrawDate: GetOwnerIdAndDrawDateRepository,
+} = defaultRepository) {
+    return {
+        listGroup: listGroup.bind(null, repository.listGroup),
+        createGroup: createGroup.bind(null, repository.createGroup),
+        getGroup: getGroup.bind(null, repository.getGroup),
+        updateGroup: updateGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.updateDrawDate, repository.getGroup),
+        deleteGroup: deleteGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.deleteGroup),
+        joinGroup: joinGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.isMember, repository.createMemberRelationship),
+        leaveGroup: leaveGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.deleteMember),
+        drawGroup: drawGroup.bind(null, repository.getOwnerIdAndDrawDate, repository.listMemberIdsOfGroup, repository.updateMemberFriend, repository.updateDrawDate),
+    }
+}
 
 export async function listGroup(listGroup: ListGroupRepository, search: { message?: string }): Promise<GroupSelected[]> {
     return await listGroup(search);

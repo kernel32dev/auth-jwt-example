@@ -1,13 +1,25 @@
-import jwt from "jsonwebtoken";
+import jsonwebtoken from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../db";
 import { getEnv } from "../utils";
 import { BadCredentialsError, EmailAlreadyUsedError, InvalidTokenError } from "./error";
 import { pbkdf2, randomBytes } from "node:crypto";
+import { repository as defaultRepository } from "./4-repository";
 
 //#region dependencies
 export interface UserWithEmailExistsRepository {
     (email: string): Promise<boolean>
+}
+export interface GetUserByIdRepository {
+    (id: string): Promise<{
+        id: string,
+        email: string,
+        name: string,
+        password: string,
+        passwordSalt: string,
+        createdAt: Date,
+        updatedAt: Date,
+    } | null>
 }
 export interface GetUserByEmailRepository {
     (email: string): Promise<{
@@ -38,13 +50,48 @@ export interface JwtSignService {
 export interface JwtVerifyService {
     (token: string): Promise<unknown>
 }
-export interface PasswordHashingService {
+export interface passwordHashService {
     (plainText: string, salt: string): Promise<string>
 }
 export interface PasswordSaltService {
     (): Promise<string>
 }
 //#endregion
+
+export function service(
+    repository: {
+        userWithEmailExists: UserWithEmailExistsRepository,
+        getUserById: GetUserByIdRepository,
+        getUserByEmail: GetUserByEmailRepository,
+        deleteUser: DeleteUserRepository,
+    } = defaultRepository,
+    jwt: {
+        jwtSign: JwtSignService,
+        jwtVerify: JwtVerifyService,
+    } = jwtService,
+    password: {
+        passwordHash: passwordHashService,
+        passwordSalt: PasswordSaltService,
+    } = passwordService,
+) {
+    return {
+        signin: signin.bind(null, repository.userWithEmailExists, jwt.jwtSign, password.passwordSalt, password.passwordHash),
+        signoff: signoff.bind(null, repository.getUserByEmail, repository.deleteUser, password.passwordHash),
+        login: login.bind(null, repository.getUserByEmail, jwt.jwtSign, password.passwordHash),
+        refresh: refresh.bind(null, repository.getUserById, jwt.jwtVerify),
+        access: access.bind(null, jwt.jwtVerify),
+    }
+}
+
+export const jwtService = {
+    jwtSign,
+    jwtVerify,
+};
+
+export const passwordService = {
+    passwordHash,
+    passwordSalt,
+};
 
 //#region constants
 
@@ -67,7 +114,7 @@ const accessToken = z.object({
 
 const jwtSecret = getEnv("JWT_SECRET");
 
-const passwordHashingConfig = {
+const passwordHashConfig = {
     pepper: getEnv("PASSWORD_PEPPER"),
     iterations: 10000,
     keyLength: 64,
@@ -80,7 +127,7 @@ export async function signin(
     userWithEmailExists: UserWithEmailExistsRepository,
     jwtSign: JwtSignService,
     genPasswordSalt: PasswordSaltService,
-    hashPassword: PasswordHashingService,
+    hashPassword: passwordHashService,
     name: string,
     email: string,
     plainTextPassword: string,
@@ -112,7 +159,7 @@ export async function signin(
 export async function signoff(
     getUserByEmail: GetUserByEmailRepository,
     deleteUser: DeleteUserRepository,
-    hashPassword: PasswordHashingService,
+    hashPassword: passwordHashService,
     email: string,
     plainTextPassword: string,
 ): Promise<void> {
@@ -128,7 +175,7 @@ export async function signoff(
 export async function login(
     getUserByEmail: GetUserByEmailRepository,
     jwtSignService: JwtSignService,
-    hashPassword: PasswordHashingService,
+    hashPassword: passwordHashService,
     email: string,
     plainTextPassword: string,
 ) {
@@ -147,25 +194,20 @@ export async function login(
     };
 }
 
-export async function refresh(jwtVerify: JwtVerifyService, token: string) {
+export async function refresh(getUserById: GetUserByIdRepository, jwtVerify: JwtVerifyService, token: string) {
     const payload = await jwtVerify(token);
 
     const parsed = refreshToken.safeParse(payload);
     if (!parsed.success) {
         throw new InvalidTokenError();
     }
-
-    const user = await prisma.user.findUnique({
-        where: {
-            id: parsed.data.user,
-        },
-    });
+    const user = await getUserById(parsed.data.user);
 
     if (!user) {
         throw new InvalidTokenError();
     }
 
-    const tokens = await jwtSignService(user);
+    const tokens = await jwtSign(user);
     return {
         id: user.id,
         email: user.email,
@@ -195,7 +237,7 @@ export async function access(jwtVerify: JwtVerifyService, token: string) {
 
 //#region jwt
 
-export async function jwtSignService(user: {
+export async function jwtSign(user: {
     id: string;
     email: string;
     name: string;
@@ -225,9 +267,9 @@ export async function jwtSignService(user: {
         token_refresh: await token_refresh,
         token_access: await token_access,
     };
-    function jwtSign(payload: string | Buffer | object, options: jwt.SignOptions) {
+    function jwtSign(payload: string | Buffer | object, options: jsonwebtoken.SignOptions) {
         return new Promise<string>((resolve, reject) => {
-            jwt.sign(payload, jwtSecret, options, (err, token) => {
+            jsonwebtoken.sign(payload, jwtSecret, options, (err, token) => {
                 if (err) {
                     reject(err);
                     return;
@@ -244,7 +286,7 @@ export async function jwtSignService(user: {
 
 export function jwtVerify(token: string) {
     return new Promise<unknown>((resolve, reject) => {
-        jwt.verify(token, jwtSecret, (err, payload) => {
+        jsonwebtoken.verify(token, jwtSecret, (err, payload) => {
             if (err || payload === undefined) {
                 reject(new InvalidTokenError());
                 return;
@@ -266,17 +308,17 @@ export function jwtVerify(token: string) {
 
 //#region password hashing
 
-export async function genPasswordSalt(): Promise<string> {
+export async function passwordSalt(): Promise<string> {
     return randomBytes(8).toString("base64url");
 }
 
-export function hashPassword(plainText: string, salt: string): Promise<string> {
+export function passwordHash(plainText: string, salt: string): Promise<string> {
     const {
         pepper: passwordPepper,
         iterations,
         keyLength,
         digest,
-    } = passwordHashingConfig;
+    } = passwordHashConfig;
     const fullSalt = Buffer.concat([
         Buffer.from(passwordPepper),
         Buffer.from(salt),
